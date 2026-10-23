@@ -9,11 +9,11 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
 
-    if (url.pathname === '/auth/login') {
-      const state = crypto.randomUUID();
-         const p = new URLSearchParams({ client_id: env.GITHUB_CLIENT_ID, scope: 'public_repo', state });
-      return new Response(null, { status: 302, headers: { Location: `https://github.com/login/oauth/authorize?${p}`, 'Set-Cookie': setCookie('gh_state', state, 600) } });
-    }
+       if (url.pathname === '/auth/login') {
+     const state = crypto.randomUUID();
+     const p = new URLSearchParams({ client_id: env.GITHUB_CLIENT_ID, scope: 'public_repo', state });
+     return new Response(null, { status: 302, headers: { Location: `https://github.com/login/oauth/authorize?${p}`, 'Set-Cookie': setCookie('gh_state', state, 600) } });
+   }
 
     if (url.pathname === '/auth/callback') {
       if (!url.searchParams.get('code') || url.searchParams.get('state') !== cookie(req, 'gh_state')) return new Response('Invalid OAuth state', { status: 400 });
