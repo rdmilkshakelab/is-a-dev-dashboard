@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Subdomain dashboard (unofficial) for is-a.dev</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#120826;--panel:#1c1033;--line:#38255a;--tx:#f1ebff;--mu:#a898c8;--ac:#8b5cf6;--ac2:#c4b5fd;--bad:#fb7185;--ok:#4ade80;color-scheme:dark}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font:16px/1.5 'Space Grotesk',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--ac2)}button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--ac2);outline-offset:2px}
+header{display:flex;align-items:center;gap:14px;padding:14px 24px;border-bottom:1px solid var(--line)}
+header img{height:30px}header b{font-size:18px;letter-spacing:-.01em}header .sp{flex:1}
+.logo-fallback{font:700 20px 'JetBrains Mono',monospace;color:var(--ac2)}
+.btn{background:var(--ac);border:0;border-radius:8px;padding:9px 16px;font-weight:500;cursor:pointer}
+.btn:hover:not(:disabled){background:#9d77f8}.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:transparent;border:1px solid var(--line)}.btn.danger{background:transparent;border:1px solid var(--bad);color:var(--bad)}
+main{flex:1;display:grid;grid-template-columns:300px 1fr;min-height:0}
+aside{border-right:1px solid var(--line);padding:18px 14px;overflow:auto}
+aside h2,.ed h2{font-size:14px;color:var(--mu);font-weight:500;margin:0 0 10px 8px}
+.tree button{display:block;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:7px 8px;cursor:pointer;font:14px 'JetBrains Mono',monospace;color:var(--tx)}
+.tree button:hover{background:var(--panel)}.tree button.on{background:var(--ac);color:#fff}
+.tree small{color:var(--mu)}
+.ed{padding:24px 32px;overflow:auto;max-width:920px}
+label{display:block;color:var(--mu);font-size:14px;margin:16px 0 6px}
+input,select,textarea{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
+.nm{display:flex;align-items:center;gap:8px}.nm span{white-space:nowrap;color:var(--mu);font-family:'JetBrains Mono',monospace}
+.row{display:grid;grid-template-columns:110px 1fr 40px;gap:8px;margin-bottom:8px}
+.row button{background:none;border:1px solid var(--line);border-radius:8px;cursor:pointer;color:var(--mu)}
+.file{margin-top:24px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.file div{background:var(--panel);padding:8px 14px;font:13px 'JetBrains Mono',monospace;color:var(--ac2);border-bottom:1px solid var(--line)}
+.file pre{margin:0;padding:14px;font:13px/1.55 'JetBrains Mono',monospace;overflow:auto;background:#0d0619}
+.errs{margin:16px 0 0;padding:0;list-style:none;color:var(--bad);font-size:14px}.errs.warn{color:#fbbf24}
+.act{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;align-items:center}
+.msg{color:var(--ac2);font-size:14px}.ok{color:var(--ok)}
+.center{margin:auto;max-width:520px;text-align:center;padding:40px 24px}
+.center h1{font-size:34px;letter-spacing:-.02em;margin:18px 0 8px}.center p{color:var(--mu)}
+.disc{border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--mu);margin-top:26px;text-align:left}
+footer{border-top:1px solid var(--line);padding:12px 24px;font-size:12px;color:var(--mu);text-align:center}
+@media(max-width:760px){main{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line)}.ed{padding:18px}}
+@media(prefers-reduced-motion:no-preference){.btn{transition:background .15s}}
+</style></head><body>
+<header><img src="/logo.png" alt="" onerror="this.outerHTML='<span class=logo-fallback>is-a.dev</span>'"><b>Subdomain dashboard</b><span class="sp"></span><div id="who"></div></header>
+<div id="app" style="display:flex;flex-direction:column;flex:1"></div>
+<footer>Unofficial community tool. I am not affiliated with is-a-dev in any way. All rights, the name "is-a-dev", all logos and related entities are the property of is-a-dev.</footer>
+<script>
+const REG='is-a-dev/register',BASE='main',TYPES=['A','AAAA','CNAME','MX','TXT'];
+const E=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const dec=b=>new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\s/g,'')),c=>c.charCodeAt(0)));
+const enc=s=>btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+async function gh(p,o={}){const r=await fetch('/gh'+p,{...o,headers:{'Content-Type':'application/json','X-Requested-With':'dashboard'}});
+  if(r.status===204)return null;const j=await r.json().catch(()=>({}));if(!r.ok){const e=new Error(j.message||r.statusText);e.status=r.status;throw e}return j}
+let S={me:null,list:[],cur:null,busy:'',pr:null,err:''};
+
+async function boot(){try{S.me=await gh('/user')}catch{S.me=null}
+  if(S.me){draw();await load()}draw()}
+async function load(){S.busy='Finding your subdomains…';draw();
+  try{const r=await gh(`/search/code?q=${encodeURIComponent(`"${S.me.login}" repo:${REG} path:domains`)}&per_page=100`);const out=[];
+    for(const it of r.items){try{const f=await gh(`/repos/${REG}/contents/${it.path}?ref=${BASE}`);const d=JSON.parse(dec(f.content));
+      if((d.owner?.username||'').toLowerCase()===S.me.login.toLowerCase())out.push({name:it.name.replace(/\.json$/,''),data:d})}catch{}}
+    S.list=out;S.err=''}catch(e){S.err='Could not load your subdomains: '+e.message}
+  S.busy=''}
+
+function openDomain(name){const x=S.list.find(d=>d.name===name),rec=x.data.records||{},rows=[],extra={};
+  for(const[k,v]of Object.entries(rec)){if(TYPES.includes(k))(Array.isArray(v)?v:[v]).forEach(val=>rows.push({t:k,v:String(val)}));else extra[k]=v}
+  S.cur={name,isNew:false,rows:rows.length?rows:[{t:'CNAME',v:''}],extra,desc:x.data.description||'',repo:x.data.repo||'',email:x.data.owner?.email||'',orig:x.data};S.pr=null;draw()}
+function newDomain(name=''){S.cur={name,isNew:true,rows:[{t:'CNAME',v:''}],extra:{},desc:'',repo:'',email:'',orig:null};S.pr=null;draw()}
+function nested(name){newDomain('.'+name);}
+
+function build(){const c=S.cur,rec={};
+  for(const r of c.rows){const v=r.v.trim();if(!v)continue;if(r.t==='CNAME')rec.CNAME=v;else(rec[r.t]=rec[r.t]||[]).push(v)}
+  if(rec.TXT?.length===1)rec.TXT=rec.TXT[0];Object.assign(rec,c.extra);
+  const o=c.orig||{},{description,repo,owner,records,...rest}=o,out={};
+  if(c.desc)out.description=c.desc;if(c.repo)out.repo=c.repo;
+  out.owner={...(owner||{}),username:S.me.login,email:c.email};out.records=rec;return{...out,...rest}}
+const v4=s=>/^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/.test(s);
+const v6=s=>s.includes(':')&&/^[0-9a-f:.]+$/i.test(s);
+const host=s=>/^(?=.{1,253}$)([a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?\.)+[a-z]{2,}\.?$/i.test(s);
+function check(){const c=S.cur,n=c.name,e=[],w=[];
+  if(!n)e.push('Enter a subdomain name.');else{
+    if(n.length>244)e.push('Names can be at most 244 characters.');
+    if(/[^a-z0-9._-]/.test(n))e.push('Use lowercase letters, numbers, dashes and dots only.');
+    if(n.includes('is-a.dev'))e.push('Name must not contain "is-a.dev".');
+    if(n.includes('..')||n.startsWith('.')||n.endsWith('.'))e.push('Dots must separate non-empty labels.');
+    if(n.includes('--'))e.push('No consecutive dashes.');
+    n.split('.').forEach((l,i)=>{if(l.length>63)e.push(`Label "${l.slice(0,10)}…" is longer than 63 characters.`);if(l.startsWith('_')&&i>0)e.push('Only the first label may start with an underscore.')});
+    if(!n.includes('.')&&n.length===1)w.push('Each person may register only one single-letter subdomain.');
+    if(c.isNew&&S.list.some(d=>d.name===n))e.push('You already own this subdomain.');
+    if(c.isNew&&n.includes('.')&&!S.list.some(d=>n.endsWith('.'+d.name)))w.push('This nested name is not under a subdomain you own. The reviewers may reject it.')}
+  const t={};c.rows.filter(r=>r.v.trim()).forEach(r=>{(t[r.t]=t[r.t]||[]).push(r.v.trim())});
+  if(!Object.keys(t).length&&!Object.keys(c.extra).length)e.push('Add at least one record.');
+  (t.A||[]).forEach(v=>v4(v)||e.push(`A record "${v}" is not a valid IPv4 address.`));
+  (t.AAAA||[]).forEach(v=>v6(v)||e.push(`AAAA record "${v}" is not a valid IPv6 address.`));
+  (t.CNAME||[]).forEach(v=>host(v)||e.push(`CNAME "${v}" is not a valid hostname.`));
+  (t.MX||[]).forEach(v=>host(v)||e.push(`MX "${v}" is not a valid hostname.`));
+  if((t.CNAME||[]).length>1)e.push('Only one CNAME record is allowed.');
+  if(t.CNAME&&(Object.keys(t).length>1||Object.keys(c.extra).length))e.push('A CNAME cannot be combined with other record types.');
+  if(!/^[^@\s]*@?[^@\s]*$/.test(c.email))e.push('Email looks invalid. Leave it blank if you prefer.');
+  return{e,w}}
+
+function tree(){const names=S.list.map(d=>d.name).sort((a,b)=>a.split('.').reverse().join('.').localeCompare(b.split('.').reverse().join('.')));
+  return names.map(n=>{let d=0,p=n;while(p.includes('.')){p=p.slice(p.indexOf('.')+1);if(names.includes(p))d++}
+    return`<button class="${S.cur&&!S.cur.isNew&&S.cur.name===n?'on':''}" style="padding-left:${8+d*16}px" onclick="openDomain('${E(n)}')">${E(n)}<small>.is-a.dev</small></button>`}).join('')}
+
+function draw(){
+  $('who').innerHTML=S.me?`<span class="msg">@${E(S.me.login)}</span> <a href="/auth/logout" class="btn ghost" style="text-decoration:none;display:inline-block;margin-left:8px">Sign out</a>`:'';
+  if(!S.me){$('app').innerHTML=`<div class="center"><h1>Manage your is-a.dev subdomains</h1><p>Sign in with GitHub to view, create and edit your subdomains. Changes are sent as pull requests from your own account.</p><p><a class="btn" style="text-decoration:none;display:inline-block;color:#fff" href="/auth/login">Sign in with GitHub</a></p>
+  <div class="disc"><b>Not affiliated with is-a-dev.</b> This is an unofficial community tool. All rights, the name "is-a-dev", all logos and related entities are the property of is-a-dev.</div></div>`;return}
+  $('app').innerHTML=`<main><aside><h2>Your subdomains</h2><div class="tree">${S.busy&&!S.cur?`<p class="msg" style="padding:8px">${E(S.busy)}</p>`:tree()||'<p class="msg" style="padding:8px">None found yet.</p>'}</div>
+   ${S.err?`<p class="errs" style="padding:8px">${E(S.err)}</p>`:''}<p style="padding:8px 0"><button class="btn" onclick="newDomain()">New subdomain</button></p></aside><section class="ed" id="ed"></section></main>`;
+  drawEd()}
+function drawEd(){const c=S.cur,el=$('ed');if(!c){el.innerHTML='<h2>Pick a subdomain, or create a new one.</h2>';return}
+  el.innerHTML=`<h2>${c.isNew?'New subdomain':'Edit subdomain'}</h2>
+  <label for="nm">Name${c.isNew?' (use dots for nested, like blog.myname)':''}</label>
+  <div class="nm"><input id="nm" value="${E(c.name)}" ${c.isNew?'':'disabled'} oninput="U('name',this.value.toLowerCase())" autocomplete="off" spellcheck="false"><span>.is-a.dev</span></div>
+  <label>Records</label>${c.rows.map((r,i)=>`<div class="row"><select onchange="R(${i},'t',this.value)">${TYPES.map(t=>`<option ${t===r.t?'selected':''}>${t}</option>`).join('')}</select><input value="${E(r.v)}" placeholder="${{A:'203.0.113.10',AAAA:'2001:db8::1',CNAME:'user.github.io',MX:'mail.example.com',TXT:'v=spf1 ...'}[r.t]}" oninput="R(${i},'v',this.value)" spellcheck="false"><button title="Remove record" aria-label="Remove record" onclick="rm(${i})">×</button></div>`).join('')}
+  <button class="btn ghost" onclick="addRow()">Add record</button>
+  ${Object.keys(c.extra).length?`<p class="msg">Also kept as-is: ${Object.keys(c.extra).map(E).join(', ')}</p>`:''}
+  <label for="ds">Description (optional)</label><input id="ds" value="${E(c.desc)}" oninput="U('desc',this.value)">
+  <label for="rp">Repository URL (optional)</label><input id="rp" value="${E(c.repo)}" oninput="U('repo',this.value)">
+  <label for="em">Contact email (optional, can stay blank)</label><input id="em" value="${E(c.email)}" oninput="U('email',this.value)">
+  <ul class="errs" id="errs"></ul><div class="file"><div id="fn"></div><pre id="pv"></pre></div>
+  <div class="act"><button class="btn" id="go" onclick="submit(false)"></button>
+  ${c.isNew?'':`<button class="btn danger" onclick="if(confirm('Open a pull request to delete '+S.cur.name+'.is-a.dev?'))submit(true)">Delete via PR</button><button class="btn ghost" onclick="nested(S.cur.name)">Add nested subdomain</button>`}<span class="msg" id="st"></span></div>`;refresh()}
+function refresh(){const c=S.cur;if(!c)return;const{e,w}=check();
+  $('errs').innerHTML=e.map(x=>`<li>• ${E(x)}</li>`).join('')+w.map(x=>`<li style="color:#fbbf24">• ${E(x)}</li>`).join('');
+  $('fn').textContent=`domains/${c.name||'…'}.json`;$('pv').textContent=JSON.stringify(build(),null,2);
+  $('go').textContent=c.isNew?'Open pull request':'Open pull request with changes';$('go').disabled=!!(e.length||S.busy);
+  $('st').innerHTML=S.pr?`<span class="ok">Done.</span> <a href="${E(S.pr)}" target="_blank" rel="noopener">View your pull request</a>`:E(S.busy)}
+const $=id=>document.getElementById(id);
+function U(k,v){S.cur[k]=v;refresh()}function R(i,k,v){S.cur.rows[i][k]=v;if(k==='t')drawEd();else refresh()}
+function addRow(){S.cur.rows.push({t:'A',v:''});drawEd()}function rm(i){S.cur.rows.splice(i,1);if(!S.cur.rows.length)S.cur.rows.push({t:'CNAME',v:''});drawEd()}
+const step=t=>{S.busy=t;refresh()};
+
+async function submit(del){const c=S.cur,me=S.me.login,path=`domains/${c.name}.json`;S.pr=null;
+  try{step('Forking is-a-dev/register…');
+    await gh(`/repos/${REG}/forks`,{method:'POST',body:'{}'});
+    for(let i=0;i<20;i++){try{await gh(`/repos/${me}/register`);break}catch{await sleep(1500)}}
+    step('Syncing your fork…');await gh(`/repos/${me}/register/merge-upstream`,{method:'POST',body:JSON.stringify({branch:BASE})}).catch(()=>{});
+    const ref=await gh(`/repos/${REG}/git/ref/heads/${BASE}`),verb=del?'remove':c.isNew?'add':'update',br=`dashboard-${verb}-${c.name}-${Date.now().toString(36)}`;
+    step('Creating a branch…');await gh(`/repos/${me}/register/git/refs`,{method:'POST',body:JSON.stringify({ref:`refs/heads/${br}`,sha:ref.object.sha})});
+    let sha;if(!c.isNew)sha=(await gh(`/repos/${me}/register/contents/${path}?ref=${encodeURIComponent(br)}`)).sha;
+    const msg=`${verb} ${c.name}.is-a.dev`;step('Committing your file…');
+    await gh(`/repos/${me}/register/contents/${path}`,{method:del?'DELETE':'PUT',body:JSON.stringify(del?{message:msg,sha,branch:br}:{message:msg,content:enc(JSON.stringify(build(),null,2)+'\n'),branch:br,sha})});
+    step('Opening the pull request…');
+    const pr=await gh(`/repos/${REG}/pulls`,{method:'POST',body:JSON.stringify({title:msg,head:`${me}:${br}`,base:BASE,maintainer_can_modify:true,body:`${msg}\n\nOpened via an unofficial community dashboard on behalf of @${me}.`})});
+    S.pr=pr.html_url;S.busy=''}
+  catch(e){S.busy='';alert('Something went wrong: '+e.message)}refresh()}
+boot();
+</script></body></html>
