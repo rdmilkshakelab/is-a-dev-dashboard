@@ -49,7 +49,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const dec=b=>new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\s/g,'')),c=>c.charCodeAt(0)));
 const enc=s=>btoa(String.fromCharCode(...new TextEncoder().encode(s)));
 async function gh(p,o={}){const r=await fetch('/gh'+p,{...o,headers:{'Content-Type':'application/json','X-Requested-With':'dashboard'}});
-  if(r.status===204)return null;const j=await r.json().catch(()=>({}));if(!r.ok){const e=new Error(j.message||r.statusText);e.status=r.status;throw e}return j}
+  if(r.status===204)return null;const j=await r.json().catch(()=>({}));if(!r.ok){const e=new    new Error((j.message||r.statusText)+' ['+(o.method||'GET')+' '+p.split('?')[0]+']')
 let S={me:null,list:[],cur:null,busy:'',pr:null,err:''};
 
 async function boot(){try{S.me=await gh('/user')}catch{S.me=null}
