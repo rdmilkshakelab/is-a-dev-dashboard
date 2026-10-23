@@ -11,7 +11,7 @@ export default {
 
     if (url.pathname === '/auth/login') {
       const state = crypto.randomUUID();
-      const p = new URLSearchParams({ client_id: env.GITHUB_CLIENT_ID, scope: 'public_repo', state, redirect_uri: `${url.origin}/auth/callback` });
+         const p = new URLSearchParams({ client_id: env.GITHUB_CLIENT_ID, scope: 'public_repo', state });
       return new Response(null, { status: 302, headers: { Location: `https://github.com/login/oauth/authorize?${p}`, 'Set-Cookie': setCookie('gh_state', state, 600) } });
     }
 
